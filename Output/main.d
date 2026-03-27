@@ -40,3 +40,8 @@
 ..\..\output\main.o: ..\..\User\AD8232.h
 ..\..\output\main.o: ..\..\User\bsp_GENERALTim.h
 ..\..\output\main.o: E:\keil_v5\Core\ARM\ARMCC\Bin\..\include\string.h
+..\..\output\main.o: ..\..\User\./lcd/bsp_ili9341_lcd.h
+..\..\output\main.o: ..\..\User\./font/fonts.h
+..\..\output\main.o: ..\..\User\./font/fonts.h
+..\..\output\main.o: ..\..\User\Z_screen.h
+..\..\output\main.o: ..\..\User\./lcd/bsp_xpt2046_lcd.h

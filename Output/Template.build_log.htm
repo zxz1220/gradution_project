@@ -27,16 +27,26 @@ Project File Date:  03/26/2026
 <h2>Output:</h2>
 *** Using Compiler 'V5.06 update 7 (build 960)', folder: 'E:\keil_v5\Core\ARM\ARMCC\Bin'
 Build target 'LDC'
+compiling Z_screen.c...
+..\..\User\Z_screen.h(31): warning:  #1-D: last line of file ends without a newline
+  #endif // __Z_SCREEN_H
+..\..\User\Z_screen.c(73): warning:  #1-D: last line of file ends without a newline
+  }
+..\..\User\Z_screen.c: 2 warnings, 0 errors
 compiling main.c...
 ..\..\User\Z_MLX.h(30): warning:  #1-D: last line of file ends without a newline
   #endif
 ..\..\User\Z_JFC.h(29): warning:  #1-D: last line of file ends without a newline
   #endif
-..\..\User\main.c: 2 warnings, 0 errors
+..\..\User\Z_screen.h(31): warning:  #1-D: last line of file ends without a newline
+  #endif // __Z_SCREEN_H
+..\..\User\main.c(26): warning:  #223-D: function "JFC103_SendCmd" declared implicitly
+      JFC103_SendCmd(0x8A);
+..\..\User\main.c: 4 warnings, 0 errors
 linking...
-Program Size: Code=8304 RO-data=384 RW-data=48 ZI-data=4264  
+Program Size: Code=7924 RO-data=15536 RW-data=88 ZI-data=4184  
 FromELF: creating hex file...
-"..\..\Output\Template.axf" - 0 Error(s), 2 Warning(s).
+"..\..\Output\Template.axf" - 0 Error(s), 6 Warning(s).
 
 <h2>Software Packages used:</h2>
 
@@ -49,7 +59,7 @@ Package Vendor: Keil
   E:/keil_v5/Packs/Keil/STM32F1xx_DFP/2.4.1/Device/Include
 
 <h2>Collection of Component Files used:</h2>
-Build Time Elapsed:  00:00:00
+Build Time Elapsed:  00:00:01
 </pre>
 </body>
 </html>
