@@ -1,7 +1,7 @@
 #ifndef _Z_MLX_H_
 #define _Z_MLX_H_
 
-#include "delay.h"
+#include "Z_common_headfile.h"
 #include "stm32f10x.h"
 
 /* Ó²¼ş½ÓÏßÅäÖÃ */

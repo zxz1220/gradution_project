@@ -1,4 +1,4 @@
-#include "Z_MLX.h"
+#include "Z_common_headfile.h"
 
 /* --- 私有底层：GPIO 方向控制 --- */
 static void MLX_SDA_Mode(uint8_t out) {

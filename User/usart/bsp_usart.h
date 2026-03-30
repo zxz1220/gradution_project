@@ -118,5 +118,5 @@ extern uint8_t JFC_RawBuf[88];
 
 void USART_Config(void);
 void JFC103_USART_Config(void);
-
+void JFC103_SendCmd(uint8_t cmd);
 #endif /* __USART_H */

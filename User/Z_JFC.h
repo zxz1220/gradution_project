@@ -3,6 +3,9 @@
 
 #include "stm32f10x.h"
 
+#define JFC_CMD_START  0x8A  // 开启连续自动发送数据
+#define JFC_CMD_STOP   0x88  // 停止发送数据
+
 #pragma pack(1) // 1字节对齐
 typedef struct {
     uint8_t  head;          // 第1字节：0xFF 数据头
