@@ -43,13 +43,13 @@ typedef struct {
     uint8_t bp_high;
     uint8_t bp_low;
     // 用于趋势绘图的微型缓冲区
-    int8_t hr_wave_buf[WAVE_WIDTH];
-    int8_t spo2_wave_buf[WAVE_WIDTH];
+    uint16_t wave_ptr;     // 绘图水平位置指针
+    uint16_t last_y[5];    // 记录心率、血氧、体温、血压的上一个 Y 坐标点   
 } HealthData_t;
 extern HealthData_t g_HealthData;
 
 void UI_Touch_Handler(void); //触控逻辑封装函数
-
+void UI_Display_Handler(void); //显示逻辑封装函数
 
 void Main_Menu_Display(void);
 void Draw_Icon_Dashboard(uint16_t x, uint16_t y);
@@ -60,5 +60,7 @@ void Draw_Icon_Settings(uint16_t x, uint16_t y);
 void Dashboard_Page_Init(void);
 void Dashboard_Page_Update(void);
 void Waveform_Menu_Init(void);
+void SPO2_Page_Init(void);
+void SPO2_Page_Update(void);
 
 #endif

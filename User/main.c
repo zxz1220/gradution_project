@@ -25,20 +25,8 @@ int main(void)
     {   
         /*触控响应*/
         UI_Touch_Handler();
-        switch (g_current_mode) 
-            {
-                case MODE_DASHBOARD:
-                    Dashboard_Page_Update(); // 只要在仪表盘模式，就持续刷新数值
-                    break;
-                    
-                case MODE_WAVE_SELECT:
-                    // 子菜单通常是静态的，Init 绘图一次即可，无需在此 Update
-                    break;
-
-                default:
-                    break;
-            }
-
+        /*显示响应*/ 
+        UI_Display_Handler();
     }
 				
 }

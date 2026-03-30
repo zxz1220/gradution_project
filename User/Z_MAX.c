@@ -1,5 +1,7 @@
+/*
+    该模块负责MAX30102传感器的初始化和数据采集，与JFC103传感器采样数据具有重叠性，且效果较差，故暂不使用该模块采样
+*/
 #include "Z_common_headfile.h"
-
 // /* --- 静态私有缓冲区 --- */
 // static uint32_t aun_ir_buffer[BUFFER_SIZE];  //
 // static uint32_t aun_red_buffer[BUFFER_SIZE]; //

@@ -1,75 +1,136 @@
 #include "Z_common_headfile.h"
 
+static uint16_t last_hr = 0, last_spo2 = 0;
+static uint8_t last_bp_h = 0, last_bp_l = 0;
+static float last_temp = 0;
+
+static uint8_t last_spo2_val = 0xFF; // 初始化为0xFF，确保第一次进入必刷新
+static uint16_t last_y_pos = 120;    // 记录上一帧Y坐标
+
 System_Mode_t g_current_mode = MODE_MENU;
 strType_XPT2046_Coordinate touch_pos;
 HealthData_t g_HealthData;
-/* 触控交互与页面跳转逻辑封装 */
+
+
+/* 触控交互与页面跳转逻辑封装 - 优化版 */
 void UI_Touch_Handler(void) 
 {
-    /* C89 变量定义必须置顶 */
+    /* 1. C89 变量定义置顶 */
     strType_XPT2046_Coordinate touch_pos;
+    static uint8_t is_touch_locked = 0; // 静态变量：触控锁定标志位
 
-    /* 1. 检测是否有触控按下 */
+    /* 2. 检测是否有触控按下 */
     if (XPT2046_Get_TouchedPoint(&touch_pos, strXPT2046_TouchPara)) 
     {
-        /* 逻辑 A：如果在主菜单，判断进入哪个功能区 */
-        if (g_current_mode == MODE_MENU) 
+        /* 如果当前处于锁定状态（手指未抬起），直接跳出，不处理逻辑 */
+        if (is_touch_locked) return;
+
+        /* --- 触发逻辑：手指刚按下，锁定！ --- */
+        is_touch_locked = 1;
+
+        /* 3. 根据当前模式进行分支判断 */
+        switch (g_current_mode)
         {
-            // 1. 点击左上角“综合仪表”
-            if (touch_pos.x < GRID_LINE_X && touch_pos.y > TITLE_HEIGHT && touch_pos.y < GRID_LINE_Y) 
-            {
-                g_current_mode = MODE_DASHBOARD; // 切换至仪表盘模式
-                Dashboard_Page_Init();           // 进入仪表界面
-                JFC103_SendCmd(JFC_CMD_START);  //JFC采样开始
-            }
-            // 2. 点击右上角“实时波形” 
-            if (touch_pos.x >= GRID_LINE_X && touch_pos.y > TITLE_HEIGHT && touch_pos.y < GRID_LINE_Y) 
-            {
-                g_current_mode = MODE_WAVE_SELECT; // 进入波形选择子状态
-                Waveform_Menu_Init();              // 绘制子菜单界面
-            }
-            // 可以在此处添加其他象限的判断（如进入实时波形等）
+            /* --- 场景：主菜单 --- */
+            case MODE_MENU:
+                // 1. 点击左侧：进入“综合仪表”
+                if (touch_pos.x < GRID_LINE_X && touch_pos.y > TITLE_HEIGHT && touch_pos.y < GRID_LINE_Y) 
+                {
+                    g_current_mode = MODE_DASHBOARD;
+                    Dashboard_Page_Init();           
+                    JFC103_SendCmd(JFC_CMD_START);  // 开启采样
+                }
+                // 2. 点击右侧：进入“实时波形”选择菜单
+                else if (touch_pos.x >= GRID_LINE_X && touch_pos.y > TITLE_HEIGHT && touch_pos.y < GRID_LINE_Y) 
+                {
+                    g_current_mode = MODE_WAVE_SELECT;
+                    Waveform_Menu_Init();              
+                }
+                break;
+
+            /* --- 场景：综合仪表盘 --- */
+            case MODE_DASHBOARD:
+                // 点击右上角返回按钮
+                if (touch_pos.y < TITLE_HEIGHT && touch_pos.x > 200) 
+                {
+                    JFC103_SendCmd(JFC_CMD_STOP);    // 停止采样
+                    g_current_mode = MODE_MENU;      
+                    Main_Menu_Display();             
+                }
+                break;
+
+            /* --- 场景：实时波形选择菜单 --- */
+            case MODE_WAVE_SELECT:
+                // 1. 返回主菜单
+                if (touch_pos.y < TITLE_HEIGHT && touch_pos.x > 200) 
+                {
+                    g_current_mode = MODE_MENU;      
+                    Main_Menu_Display();             
+                }
+                // 2. 进入心电全屏 (左侧)
+                else if (touch_pos.y > TITLE_HEIGHT && touch_pos.x < 160) 
+                {
+                    g_current_mode = MODE_ECG_LIVE;
+                    // ECG_Page_Init(); 
+                }
+                // 3. 进入血氧全屏 (右侧)
+                else if (touch_pos.y > TITLE_HEIGHT && touch_pos.x >= 160) 
+                {
+                    g_current_mode = MODE_SPO2_LIVE;
+                    g_HealthData.wave_ptr = 0;       // 进度清零
+                    SPO2_Page_Init();                // 初始化全屏背景
+                    JFC103_SendCmd(JFC_CMD_START);   // 开启采样
+                }
+                break;
+
+            /* --- 场景：血氧全屏测量 --- */
+            case MODE_SPO2_LIVE:
+                // 返回波形选择菜单
+                if (touch_pos.y < TITLE_HEIGHT && touch_pos.x > 200) 
+                {
+                    JFC103_SendCmd(JFC_CMD_STOP);    // 停止采样
+                    g_current_mode = MODE_WAVE_SELECT;
+                    Waveform_Menu_Init();            
+                }
+                break;
+
+            default:
+                break;
         }
-        /* 如果在综合仪表子页面，点击右上角“返回”区域则回到主菜单 */
-        else if (g_current_mode == MODE_DASHBOARD) 
+    }
+    else 
+    {
+        /* --- 释放逻辑：检测到手指离开屏幕，重置锁定标志 --- */
+        is_touch_locked = 0;
+    }
+}
+
+void UI_Display_Handler(void) 
+{
+    switch (g_current_mode) 
+    {
+        case MODE_DASHBOARD:
+            Dashboard_Page_Update(); // 仪表盘模式下持续刷新数值
+            break;
+            
+        case MODE_ECG_LIVE:
+            // 后续在此处添加全屏心电图刷新逻辑
+            break;
+
+        case MODE_SPO2_LIVE:
         {
-            // 判定是否点击了顶部标题栏 (y < 40) 且位于右侧返回区域 (x > 200)
-            if (touch_pos.y < TITLE_HEIGHT && touch_pos.x > 200) 
+            static uint16_t t_draw = 0; 
+            if (++t_draw >= 50) 
             {
-                JFC103_SendCmd(JFC_CMD_STOP);    //JFC采样停止
-                g_current_mode = MODE_MENU;      // 切回菜单模式
-                Main_Menu_Display();             // 重新显示四宫格主页面
+                t_draw = 0;
+                SPO2_Page_Update(); // 每 50 个循环周期执行一次绘制
             }
         }
-        /* --- 当前在实时波形选择子菜单 --- */
-        else if (g_current_mode == MODE_WAVE_SELECT) 
-        {
-            // 1. 点击右上角“返回”区域
-            if (touch_pos.y < TITLE_HEIGHT && touch_pos.x > 200) 
-            {
-                g_current_mode = MODE_MENU;      
-                Main_Menu_Display();             
-            }
-            // 2. 点击左侧区域：进入心电全屏绘制
-            if (touch_pos.y > TITLE_HEIGHT && touch_pos.x < 160) 
-            {
-                g_current_mode = MODE_ECG_LIVE;
-                // ECG_Page_Init(); // 待编写：心电全屏背景初始化
-            }
-            // 3. 点击右侧区域：进入血氧全屏绘制
-            if (touch_pos.y > TITLE_HEIGHT && touch_pos.x >= 160) 
-            {
-                g_current_mode = MODE_SPO2_LIVE;
-                // SPO2_Page_Init(); // 待编写：血氧全屏背景初始化
-            }
-        }
-        
-        // /* 逻辑 C：其他子页面通用返回（可选：点击整个标题栏均可返回） */
-        // else if (touch_pos.y < TITLE_HEIGHT) 
-        // {
-        //     g_current_mode = MODE_MENU;
-        //     Main_Menu_Display(); 
-        // }
+            break;
+
+        default:
+            // 菜单页面为静态，Init 时绘制一次即可，无需在此重复刷新
+            break;
     }
 }
 
@@ -177,6 +238,23 @@ void Main_Menu_Display(void) {
 }
 
 
+/**
+ * @brief 将数值映射到对应行的 Y 坐标区间
+ * @param row 所在的行 (0-3)
+ * @param val 当前数值
+ * @param min 数值范围最小值
+ * @param max 数值范围最大值
+ */
+uint16_t Map_Value_To_Y(uint8_t row, float val, float min, float max) {
+    uint16_t row_top = 41 + (row * 50);    // 每行顶部位
+    uint16_t row_bottom = 89 + (row * 50); // 每行底部位
+    
+    if (val < min) val = min;
+    if (val > max) val = max;
+    
+    // 纵向映射计算：值越大，Y坐标越小（向上跑）
+    return (uint16_t)(row_bottom - (val - min) * (row_bottom - row_top) / (max - min));
+}
 
 
 void Dashboard_Page_Init(void) // 综合仪表盘下属页面初始化
@@ -217,6 +295,12 @@ void Dashboard_Page_Init(void) // 综合仪表盘下属页面初始化
 void Dashboard_Page_Update(void) 
 {
     char buf[32];
+    const uint16_t x_start = DASH_WAVE_X;             // 起始位置 (140)
+    const uint16_t x_end = 315;                       // 结束位置
+    const uint16_t x_range = x_end - x_start + 1;     // 总宽度
+    uint8_t i; // C89 变量声明
+    uint16_t x, clean_x;
+    uint16_t current_y[5];
     static uint16_t temp_tick = 0; // 用于体温采样分频
     /* 1. 检查 JFC 模块数据是否就绪 */
     if (JFC_DataReady) 
@@ -229,40 +313,85 @@ void Dashboard_Page_Update(void)
         JFC_DataReady = 0; /* 清除标志位，等待下一包 */
     }
     /* 2. 采样体温数据 (MLX90614) */
-    /* 由于 I2C 读取较慢，我们不需要每帧都读，大约每 20-50 帧读一次即可 */
     if (++temp_tick >= 50) 
     {
         temp_tick = 0;
-        // 读取物体温度并存入全局结构体
-        g_HealthData.temp = (float)MLX90614_ReadObjectTempC(); 
+        // 读取原始值
+        g_HealthData.temp = (float)MLX90614_ReadObjectTempC();
     }
-    /* 2. 刷新左侧数值显示 (使用 16x24 字体) */
+
+/* 3. 扫描式双血压线绘图逻辑 */
+    x = DASH_WAVE_X + g_HealthData.wave_ptr;
+    clean_x = x_start + (g_HealthData.wave_ptr + 1) % x_range;
+    if (clean_x > x_end) clean_x = x_start + (clean_x - x_end);
+
+    // 计算 Y 映射坐标
+    current_y[0] = Map_Value_To_Y(0, (float)g_HealthData.hr, 40, 180);
+    current_y[1] = Map_Value_To_Y(1, (float)g_HealthData.spo2, 80, 100);
+    current_y[2] = Map_Value_To_Y(2, g_HealthData.temp, 20.0f, 42.0f);
+    // 第四行绘制两条线：高压和低压
+    current_y[3] = Map_Value_To_Y(3, (float)g_HealthData.bp_high, 40, 160); // 高压映射
+    current_y[4] = Map_Value_To_Y(3, (float)g_HealthData.bp_low, 40, 160);  // 低压映射
+
+    // --- 局部擦除 (刷子) ---
+    LCD_SetTextColor(BLACK);
+    ILI9341_DrawLine(clean_x, 41,  clean_x, 89);
+    ILI9341_DrawLine(clean_x, 91,  clean_x, 139);
+    ILI9341_DrawLine(clean_x, 141, clean_x, 189);
+    ILI9341_DrawLine(clean_x, 191, clean_x, 239);
+
+    // --- 连线绘图 ---
+    if (g_HealthData.wave_ptr > 0) {
+        LCD_SetTextColor(RED);   ILI9341_DrawLine(x-1, g_HealthData.last_y[0], x, current_y[0]);
+        LCD_SetTextColor(GREEN); ILI9341_DrawLine(x-1, g_HealthData.last_y[1], x, current_y[1]);
+        LCD_SetTextColor(WHITE); ILI9341_DrawLine(x-1, g_HealthData.last_y[2], x, current_y[2]);
+        LCD_SetTextColor(CYAN);  ILI9341_DrawLine(x-1, g_HealthData.last_y[3], x, current_y[3]);
+        ILI9341_DrawLine(x-1, g_HealthData.last_y[4], x, current_y[4]); 
+    }
+    
+    // 更新历史坐标
+    for(i=0; i<5; i++) g_HealthData.last_y[i] = current_y[i];
+
+    g_HealthData.wave_ptr++;
+    if (g_HealthData.wave_ptr >= x_range) {
+        g_HealthData.wave_ptr = 0;
+    }
+
+    /* 4. 左侧数值按需刷新 (优化 CPU 占用) */
     LCD_SetFont(&Font8x16);
 
-    // 刷新心率
-    LCD_SetColors(RED, BLACK);
-    if (g_HealthData.hr == 0) sprintf(buf, " -- BPM"); // 没摸到时显示 --
-        else sprintf(buf, "%3d BPM", g_HealthData.hr);
-    ILI9341_DispString_EN(DASH_VAL_X + 50, 60, buf);
+    if (g_HealthData.hr != last_hr) {
+        LCD_SetColors(RED, BLACK);
+        if (g_HealthData.hr == 0) ILI9341_DispString_EN(DASH_VAL_X + 40, 60, " -- BPM"); // 异常检测
+        else { sprintf(buf, "%3d BPM", g_HealthData.hr); ILI9341_DispString_EN(DASH_VAL_X + 40, 60, buf); }
+        last_hr = g_HealthData.hr;
+    }
 
-    // 刷新血氧
-    LCD_SetColors(GREEN, BLACK);
-    if (g_HealthData.spo2 == 0) sprintf(buf, " -- %%  ");
-        else sprintf(buf, "%3d %% ", g_HealthData.spo2);
-    ILI9341_DispString_EN(DASH_VAL_X + 50, 110, buf);
+    if (g_HealthData.spo2 != last_spo2) {
+        LCD_SetColors(GREEN, BLACK);
+        if (g_HealthData.spo2 == 0) ILI9341_DispString_EN(DASH_VAL_X + 40, 110, " -- %%  ");
+        else { sprintf(buf, "%3d %% ", g_HealthData.spo2); ILI9341_DispString_EN(DASH_VAL_X + 40, 110, buf); }
+        last_spo2 = g_HealthData.spo2;
+    }
 
-    // 刷新体温（暂时显示未接入）
-    LCD_SetColors(WHITE, BLACK);
-    sprintf(buf, "%2.1f C", g_HealthData.temp); 
-    ILI9341_DispString_EN(DASH_VAL_X + 50, 160, buf);
+    if (g_HealthData.temp != last_temp) {
+        LCD_SetColors(WHITE, BLACK);
+        sprintf(buf, "%2.1f C", g_HealthData.temp);
+        ILI9341_DispString_EN(DASH_VAL_X + 40, 160, buf);
+        last_temp = g_HealthData.temp;
+    }
 
-    // 刷新血压
-    LCD_SetColors(CYAN, BLACK);
-    if (g_HealthData.hr == 0) sprintf(buf, "-/- ");
-    else sprintf(buf, "%3d/%3d ", g_HealthData.bp_high, g_HealthData.bp_low);
-    ILI9341_DispString_EN(DASH_VAL_X + 50, 210, buf);
-    /* 暂时屏蔽波形绘制逻辑，不增加 wave_ptr */
-    // g_HealthData.wave_ptr++; 
+if (g_HealthData.bp_high != last_bp_h || g_HealthData.bp_low != last_bp_l) {
+        LCD_SetColors(CYAN, BLACK);
+        if (g_HealthData.hr == 0) {
+            ILI9341_DispString_EN(DASH_VAL_X + 40, 210, " --/--   "); 
+        } else {
+            sprintf(buf, "%3d/%2d  ", g_HealthData.bp_high, g_HealthData.bp_low); 
+            ILI9341_DispString_EN(DASH_VAL_X + 40, 210, buf);
+        }
+        last_bp_h = g_HealthData.bp_high; 
+        last_bp_l = g_HealthData.bp_low;
+    }
 }
 
 void Waveform_Menu_Init(void) // 实时波形选择界面
@@ -298,8 +427,103 @@ void Waveform_Menu_Init(void) // 实时波形选择界面
     LCD_SetTextColor(CYAN);
     Draw_Icon_Waveform(240, 100); 
     LCD_SetFont(&Font16x24);
-    ILI9341_DispString_CH(208, 160, "血氧测量");
+    ILI9341_DispString_CH(208, 160, "血氧脉冲");
 }
 
+void SPO2_Page_Init(void) 
+{
+    ILI9341_Clear(0, 0, LCD_X_LENGTH, LCD_Y_LENGTH);
+    
+    LCD_SetFont(&Font16x24);
+    LCD_SetColors(CYAN, BLACK);
+    ILI9341_DispString_CH(10, 10, "血氧脉冲"); 
+    
+    LCD_SetColors(RED, BLACK);
+    ILI9341_DispString_CH(240, 10, "返回"); 
+    
+    LCD_SetTextColor(GREY);
+    ILI9341_DrawLine(0, 40, 320, 40); // 顶部边界
 
+    LCD_SetColors(GREEN, BLACK);
+    ILI9341_DispString_CH(80, 210, "血氧值：");
+    
+    /* 核心状态重置 */
+    last_spo2_val = 0xFF; 
+    g_HealthData.wave_ptr = 0; // 从 0 开始
+    last_y_pos = 120;          // 基准线设在正中间
+}
+
+void SPO2_Page_Update(void) {
+    /* 1. C89 变量定义置顶 */
+    char buf[16];
+    uint16_t x, curr_y, clean_x;
+    int16_t raw_val;
+    uint8_t j; 
+    
+    /* 静态缓冲区：用于存放尚未画出的点 */
+    static int8_t  fifo_queue[256];   /* 增大缓冲区，防止溢出 */
+    static uint16_t queue_count = 0;   /* 队伍里还有多少个点 */
+    static uint16_t read_idx = 0;      /* 下一个要画的点的位置 */
+    static uint16_t write_idx = 0;     /* 采样数据存入的位置 */
+
+    const uint16_t x_start = 10;
+    const uint16_t x_end = 310;
+    const uint16_t x_range = x_end - x_start;
+    const uint16_t baseline_y = 115;   /* 物理中心线 */
+
+    /* 2. 接收数据阶段：只存不画 */
+    if (JFC_DataReady) {
+        for(j = 0; j < 64; j++) {
+            fifo_queue[write_idx] = JFC_RawBuf[1 + j];
+            write_idx = (write_idx + 1) % 256;
+            if(queue_count < 256) queue_count++; 
+        }
+        
+        /* 刷新数值（数值更新不卡顿，随包走） */
+        if (JFC_RawBuf[66] != last_spo2_val) {
+            LCD_SetFont(&Font8x16);
+            LCD_SetTextColor(BLACK);
+            ILI9341_DrawRectangle(176, 210, 80, 24, 1); 
+            LCD_SetColors(GREEN, BLACK);
+            if (JFC_RawBuf[66] == 0) ILI9341_DispString_EN(176, 210, "-- %");
+            else {
+                sprintf(buf, "%d %%", JFC_RawBuf[66]);
+                ILI9341_DispString_EN(176, 210, buf);
+            }
+            last_spo2_val = JFC_RawBuf[66];
+        }
+        JFC_DataReady = 0; 
+    }
+
+    /* 3. 绘图阶段：每调用一次 Update，画 1 个像素点 */
+    /* 这种“细水长流”的画法，视觉上最丝滑 */
+    if (queue_count > 0) {
+        x = x_start + g_HealthData.wave_ptr;
+
+        // --- A. 刷子 ---
+        clean_x = x_start + (g_HealthData.wave_ptr + 2) % x_range;
+        LCD_SetTextColor(BLACK);
+        ILI9341_DrawLine(clean_x, 41, clean_x, 205); 
+
+        // --- B. 映射 ---
+        raw_val = (int16_t)fifo_queue[read_idx];
+        curr_y = baseline_y - (raw_val * 50 / 128); 
+
+        // --- C. 连线 ---
+        if (g_HealthData.wave_ptr > 0) {
+            LCD_SetTextColor(GREEN);
+            ILI9341_DrawLine(x - 1, last_y_pos, x, curr_y);
+        }
+
+        // --- D. 状态迭代 ---
+        last_y_pos = curr_y;
+        read_idx = (read_idx + 1) % 256;
+        queue_count--;
+        
+        g_HealthData.wave_ptr++;
+        if (g_HealthData.wave_ptr >= x_range) {
+            g_HealthData.wave_ptr = 0; 
+        }
+    }
+}
 
