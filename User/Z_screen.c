@@ -344,7 +344,6 @@ uint16_t Map_Value_To_Y(uint8_t row, float val, float min, float max) {
     return (uint16_t)(row_bottom - (val - min) * (row_bottom - row_top) / (max - min));
 }
 
-
 void Dashboard_Page_Init(void) // 综合仪表盘下属页面初始化
 {
     /* 1. 清屏并绘制背景 */
