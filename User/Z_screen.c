@@ -71,7 +71,7 @@ void UI_Touch_Handler(void)
                 else if (touch_pos.y > TITLE_HEIGHT && touch_pos.x < 160) 
                 {
                     g_current_mode = MODE_ECG_LIVE;
-                    // ECG_Page_Init(); 
+                    ECG_Page_Init(); 
                 }
                 // 3. 进入血氧全屏 (右侧)
                 else if (touch_pos.y > TITLE_HEIGHT && touch_pos.x >= 160) 
@@ -91,6 +91,14 @@ void UI_Touch_Handler(void)
                     JFC103_SendCmd(JFC_CMD_STOP);    // 停止采样
                     g_current_mode = MODE_WAVE_SELECT;
                     Waveform_Menu_Init();            
+                }
+                break;
+            case MODE_ECG_LIVE:
+                // 点击右上角返回
+                if (touch_pos.y < TITLE_HEIGHT && touch_pos.x > 200) 
+                {
+                    g_current_mode = MODE_WAVE_SELECT;
+                    Waveform_Menu_Init();
                 }
                 break;
 
@@ -114,9 +122,15 @@ void UI_Display_Handler(void)
             break;
             
         case MODE_ECG_LIVE:
-            // 后续在此处添加全屏心电图刷新逻辑
+        {   
+            // static uint16_t e_draw = 0; 
+            // if (++e_draw >= 50) 
+            // {
+            //     e_draw = 0;
+                ECG_Page_Update(); // 每 50 个循环周期执行一次绘制
+            // }
             break;
-
+        }
         case MODE_SPO2_LIVE:
         {
             static uint16_t t_draw = 0; 
@@ -430,7 +444,7 @@ void Waveform_Menu_Init(void) // 实时波形选择界面
     ILI9341_DispString_CH(208, 160, "血氧脉冲");
 }
 
-void SPO2_Page_Init(void) 
+void SPO2_Page_Init(void)   // 血氧全屏测量页面初始化
 {
     ILI9341_Clear(0, 0, LCD_X_LENGTH, LCD_Y_LENGTH);
     
@@ -527,3 +541,82 @@ void SPO2_Page_Update(void) {
     }
 }
 
+void ECG_Page_Init(void)   // 心电全屏测量页面初始化
+{
+    // 1. 全屏清黑
+    ILI9341_Clear(0, 0, LCD_X_LENGTH, LCD_Y_LENGTH);
+    
+    // 2. 顶部状态栏
+    LCD_SetFont(&Font16x24);
+    LCD_SetColors(CYAN, BLACK);
+    ILI9341_DispString_CH(10, 10, "心电测量"); 
+    
+    LCD_SetColors(RED, BLACK);
+    ILI9341_DispString_CH(240, 10, "返回"); 
+    
+    LCD_SetTextColor(GREY);
+    ILI9341_DrawLine(0, 40, 320, 40); // 标题分割线
+
+    // 3. 变量初始化 (中心点定在120)
+    g_HealthData.wave_ptr = 0;
+    last_y_pos = 120; 
+}
+
+void ECG_Page_Update(void) {
+    /* 1. C89 变量定义置顶 */
+    uint16_t x, curr_y, clean_x;
+    float ecg_voltage;
+    int16_t relative_val;
+    uint8_t s;
+    
+    static uint16_t t_draw = 0;
+
+    /* --- 核心配置参数 --- */
+    const uint16_t x_start = 10;
+    const uint16_t x_end = 310;
+    const uint16_t x_range = x_end - x_start;
+    
+    const uint8_t  x_step = 1;       /* 保持 1 像素步长 */
+    const uint16_t baseline_y = 140; /* 基准线设在 135，给 R 波向上留足空间 */
+
+    /* 2. 周期判定：每 10 次主循环绘制一个点 */
+    if (++t_draw < 5) return; 
+    t_draw = 0;
+
+    /* 3. 获取数据 (AD8232.c 中的滤波接口) */
+    ecg_voltage = AD8232_Filter();
+    relative_val = (int16_t)(ecg_voltage - 1650.0f);
+    
+    /* 4. Y 轴映射：为了让峰值更明显，增益维持在 200 以上 */
+    curr_y = baseline_y - (relative_val * 150 / 1000); 
+
+    /* --- 核心修正：全屏限幅 --- */
+    if (curr_y < 41)  curr_y = 41;  /* 顶部留出标题栏位置 */
+    if (curr_y > 239) curr_y = 239; /* 底部直接顶到 ILI9341 的物理边界 */
+
+    /* 5. 绘图逻辑 */
+    x = x_start + (g_HealthData.wave_ptr * x_step);
+
+    /* --- 关键修正：动态刷子必须刷到 239 --- */
+    /* 如果这里只刷到 205，屏幕下半部分就会留下旧波形的残影，导致“刷新不明白” */
+    LCD_SetTextColor(BLACK);
+    for(s = 0; s <= x_step; s++) {
+        clean_x = x_start + ((g_HealthData.wave_ptr + 2) * x_step) % x_range;
+        // 这里的 239 必须和上面的限幅一致，确保垂直方向全覆盖
+        ILI9341_DrawLine(clean_x, 41, clean_x, 239); 
+    }
+
+    // 连线绘图
+    if (g_HealthData.wave_ptr > 0) {
+        LCD_SetTextColor(GREEN);
+        ILI9341_DrawLine(x - x_step, last_y_pos, x, curr_y);
+    }
+
+    /* 6. 状态迭代 */
+    last_y_pos = curr_y;
+    g_HealthData.wave_ptr++;
+    
+    if ((g_HealthData.wave_ptr * x_step) >= x_range) {
+        g_HealthData.wave_ptr = 0; 
+    }
+}

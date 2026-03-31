@@ -98,17 +98,44 @@ uint16_t ECG_Filter(uint16_t raw_adc)
     return (uint16_t)val;
 }
 
+// /**
+//  * @brief AD8232最终滤波接口
+//  */
+// float AD8232_Filter(void)
+// {
+//     extern __IO uint16_t ADC_ConvertedValue[NOFCHANEL];
+
+
+//     // uint16_t filtered_adc = ECG_Filter(ADC_ConvertedValue[1]);
+//     uint16_t filtered_adc = ADC_ConvertedValue[1];
+//     if(filtered_adc < 0) filtered_adc = 0;
+//     if(filtered_adc > ADC_MAX_VALUE) filtered_adc = ADC_MAX_VALUE;
+
+//     float voltage = filtered_adc * ADC_REF_VOLTAGE / ADC_MAX_VALUE;
+    
+//     return voltage;
+// }
 /**
- * @brief AD8232最终滤波接口
+ * @brief AD8232 最终滤波接口
  */
 float AD8232_Filter(void)
 {
+    /* 1. 声明必须全部放在最顶端 */
     extern __IO uint16_t ADC_ConvertedValue[NOFCHANEL];
+    uint16_t filtered_adc;
+    float voltage;
     
-    uint16_t filtered_adc = ECG_Filter(ADC_ConvertedValue[1]);
-    float voltage = filtered_adc * ADC_REF_VOLTAGE / ADC_MAX_VALUE;
+    /* 2. 执行语句逻辑 */
+    filtered_adc = ECG_Filter(ADC_ConvertedValue[1]);
+    
+    /* 修正 Warning: uint16_t 永远不会小于 0，所以删掉该判断 */
+    if(filtered_adc > ADC_MAX_VALUE) {
+        filtered_adc = ADC_MAX_VALUE;
+    }
+    
+    /* 计算电压值 */
+    voltage = (float)filtered_adc * ADC_REF_VOLTAGE / ADC_MAX_VALUE;
     
     return voltage;
 }
-
 

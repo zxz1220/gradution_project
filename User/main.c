@@ -9,8 +9,9 @@ int main(void)
     /*变量声明*/
 
     /*外设初始化*/
-    delay_init(72);      //
-    USART_Config();     //
+    delay_init(72);      // 延时初始化
+    USART_Config();     // 串口初始化
+    ADCx_Init();        //ADC初始化
     JFC103_USART_Config(); //JFC103 串口初始化
     ILI9341_Init();     //屏幕初始化
     ILI9341_GramScan(3); //设置屏幕

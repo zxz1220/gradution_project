@@ -62,5 +62,6 @@ void Dashboard_Page_Update(void);
 void Waveform_Menu_Init(void);
 void SPO2_Page_Init(void);
 void SPO2_Page_Update(void);
-
+void ECG_Page_Init(void);
+void ECG_Page_Update(void);
 #endif
