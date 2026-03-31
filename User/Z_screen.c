@@ -11,6 +11,18 @@ System_Mode_t g_current_mode = MODE_MENU;
 strType_XPT2046_Coordinate touch_pos;
 HealthData_t g_HealthData;
 
+/* 实体定义：给全局变量分配内存并初始化 */
+ThresholdConfig g_sys_limit = {
+    120,    /* hr_max */
+    50,     /* hr_min */
+    95,     /* spo2_min */
+    37.5f,  /* temp_max */
+    36.0f,  /* temp_min */
+    140,    /* sbp_max */
+    90,     /* sbp_min */
+    90,     /* dbp_max */
+    60      /* dbp_min */
+};
 
 /* 触控交互与页面跳转逻辑封装 - 优化版 */
 void UI_Touch_Handler(void) 
@@ -45,6 +57,11 @@ void UI_Touch_Handler(void)
                 {
                     g_current_mode = MODE_WAVE_SELECT;
                     Waveform_Menu_Init();              
+                }
+                // 3. 右下：系统设置 (新增)STM32F103_指南者开发板硬件规格书.pdf]
+                else if (touch_pos.x >= GRID_LINE_X && touch_pos.y >= GRID_LINE_Y) {
+                    g_current_mode = MODE_SETTINGS;
+                    Settings_Page_Init(); // 执行你设计的子菜单背景初始化
                 }
                 break;
 
@@ -101,7 +118,62 @@ void UI_Touch_Handler(void)
                     Waveform_Menu_Init();
                 }
                 break;
+            case MODE_SETTINGS:
+            {
+                /* 1. C89 变量定义置顶 */
+                uint16_t tx, ty;
+                tx = touch_pos.x;
+                ty = touch_pos.y;
 
+                /* A. 返回按钮判定 (右上角) */
+                if (ty < 40 && tx > 220) {
+                    g_current_mode = MODE_MENU;
+                    Main_Menu_Display();
+                    return;
+                }
+
+                /* B. 参数行判定与调节 (基于 8x16 字体坐标推导) */
+                
+                // --- 第一行：心率 (y: 55-80) ---
+                if (ty >= 55 && ty < 80) {
+                    // 心率下限调节
+                    if (tx >= 80  && tx <= 115) g_sys_limit.hr_min--; // [-]
+                    if (tx >= 145 && tx <= 180) g_sys_limit.hr_min++; // [+]
+                    // 心率上限调节
+                    if (tx >= 200 && tx <= 235) g_sys_limit.hr_max--; // [-]
+                    if (tx >= 265 && tx <= 300) g_sys_limit.hr_max++; // [+]
+                }
+                
+                // --- 第二行：血氧 (y: 90-115) ---
+                else if (ty >= 90 && ty < 115) {
+                    if (tx >= 135 && tx <= 170) g_sys_limit.spo2_min--; // [-]
+                    if (tx >= 215 && tx <= 250) g_sys_limit.spo2_min++; // [+]
+                }
+                
+                // --- 第三行：体温 (y: 125-150) ---
+                else if (ty >= 125 && ty < 150) {
+                    if (tx >= 135 && tx <= 170) g_sys_limit.temp_max -= 0.1f; // [-]
+                    if (tx >= 215 && tx <= 250) g_sys_limit.temp_max += 0.1f; // [+]
+                }
+                
+                // --- 第四行：高压 SBP (y: 160-185) ---
+                else if (ty >= 160 && ty < 185) {
+                    if (tx >= 125 && tx <= 160) g_sys_limit.sbp_max--; // [-]
+                    if (tx >= 230 && tx <= 265) g_sys_limit.sbp_max++; // [+]
+                }
+                
+                // --- 第五行：低压 DBP (y: 195-220) ---
+                else if (ty >= 195 && ty < 220) {
+                    if (tx >= 125 && tx <= 160) g_sys_limit.dbp_max--; // [-]
+                    if (tx >= 230 && tx <= 265) g_sys_limit.dbp_max++; // [+]
+                }
+
+                /* C. 数据安全校验：确保逻辑合理性 */
+                if (g_sys_limit.hr_max < g_sys_limit.hr_min + 5) g_sys_limit.hr_max = g_sys_limit.hr_min + 5;
+                if (g_sys_limit.spo2_min > 100) g_sys_limit.spo2_min = 100;
+                if (g_sys_limit.temp_max > 45.0f) g_sys_limit.temp_max = 45.0f;
+            }
+                break;
             default:
                 break;
         }
@@ -120,7 +192,9 @@ void UI_Display_Handler(void)
         case MODE_DASHBOARD:
             Dashboard_Page_Update(); // 仪表盘模式下持续刷新数值
             break;
-            
+        case MODE_SETTINGS:
+            Settings_Page_Update(); // 系统设置页面持续刷新数值
+            break;
         case MODE_ECG_LIVE:
         {   
             // static uint16_t e_draw = 0; 
@@ -304,6 +378,9 @@ void Dashboard_Page_Init(void) // 综合仪表盘下属页面初始化
     LCD_SetTextColor(GREEN);  ILI9341_DispString_CH(DASH_VAL_X, 105, "血氧：");
     LCD_SetTextColor(WHITE);  ILI9341_DispString_CH(DASH_VAL_X, 155, "体温：");
     LCD_SetTextColor(CYAN);   ILI9341_DispString_CH(DASH_VAL_X, 205, "血压：");
+
+    ILI9341_DispString_EN(DASH_VAL_X + 45, 195, "H:"); 
+    ILI9341_DispString_EN(DASH_VAL_X + 45, 215, "L:");
 }
 
 void Dashboard_Page_Update(void) 
@@ -395,17 +472,31 @@ void Dashboard_Page_Update(void)
         last_temp = g_HealthData.temp;
     }
 
-if (g_HealthData.bp_high != last_bp_h || g_HealthData.bp_low != last_bp_l) {
-        LCD_SetColors(CYAN, BLACK);
-        if (g_HealthData.hr == 0) {
-            ILI9341_DispString_EN(DASH_VAL_X + 40, 210, " --/--   "); 
-        } else {
-            sprintf(buf, "%3d/%2d  ", g_HealthData.bp_high, g_HealthData.bp_low); 
-            ILI9341_DispString_EN(DASH_VAL_X + 40, 210, buf);
+    if (g_HealthData.bp_high != last_bp_h || g_HealthData.bp_low != last_bp_l) {
+            LCD_SetColors(CYAN, BLACK);
+            LCD_SetFont(&Font8x16); // 确保使用 8x16 字体与 Init 标签对齐
+
+            // 判定：如果没采集到数据 (心率和血压均为0)
+            if (g_HealthData.hr == 0 && g_HealthData.bp_high == 0) {
+                // 在 H: 标签后面刷新 (X 偏移 70)
+                ILI9341_DispString_EN(DASH_VAL_X + 70, 195, "---"); 
+                // 在 L: 标签后面刷新
+                ILI9341_DispString_EN(DASH_VAL_X + 70, 215, "---");
+            } else {
+                // 刷新高压数值 (H)
+                sprintf(buf, "%3d", g_HealthData.bp_high); 
+                ILI9341_DispString_EN(DASH_VAL_X + 70, 195, buf);
+                
+                // 刷新低压数值 (L)
+                sprintf(buf, "%3d", g_HealthData.bp_low); 
+                ILI9341_DispString_EN(DASH_VAL_X + 70, 215, buf);
+            }
+
+            /* 更新旧值用于下一帧对比 */
+            last_bp_h = g_HealthData.bp_high; 
+            last_bp_l = g_HealthData.bp_low;
         }
-        last_bp_h = g_HealthData.bp_high; 
-        last_bp_l = g_HealthData.bp_low;
-    }
+    Dashboard_Alarm_Implementation();
 }
 
 void Waveform_Menu_Init(void) // 实时波形选择界面
@@ -467,7 +558,8 @@ void SPO2_Page_Init(void)   // 血氧全屏测量页面初始化
     last_y_pos = 120;          // 基准线设在正中间
 }
 
-void SPO2_Page_Update(void) {
+void SPO2_Page_Update(void) 
+{
     /* 1. C89 变量定义置顶 */
     char buf[16];
     uint16_t x, curr_y, clean_x;
@@ -562,7 +654,8 @@ void ECG_Page_Init(void)   // 心电全屏测量页面初始化
     last_y_pos = 120; 
 }
 
-void ECG_Page_Update(void) {
+void ECG_Page_Update(void) 
+{
     /* 1. C89 变量定义置顶 */
     uint16_t x, curr_y, clean_x;
     float ecg_voltage;
@@ -620,3 +713,148 @@ void ECG_Page_Update(void) {
         g_HealthData.wave_ptr = 0; 
     }
 }
+
+void Settings_Page_Init(void) // 系统设置全屏页面初始化
+{
+    /* 1. 全屏清黑 */
+    ILI9341_Clear(0, 0, LCD_X_LENGTH, LCD_Y_LENGTH);
+
+    /* 2. 顶部标题栏STM32F103_指南者开发板硬件规格书.pdf] */
+    LCD_SetFont(&Font16x24);
+    LCD_SetColors(WHITE, BLACK);
+    ILI9341_DispString_CH(110, 10, "系统设置");
+    
+    /* 右上角返回按钮 */
+    LCD_SetTextColor(RED);
+    ILI9341_DispString_CH(240, 10, "返回");
+    
+    /* 标题分割线 */
+    LCD_SetTextColor(GREY);
+    ILI9341_DrawLine(0, 40, 320, 40);
+
+    /* 3. 绘制参数标签 (左侧固定文字) */
+    LCD_SetColors(CYAN, BLACK);
+    ILI9341_DispString_CH(10, 60,  "心率设置：");
+    ILI9341_DispString_CH(10, 95,  "血氧报警：");
+    ILI9341_DispString_CH(10, 130, "体温报警：");
+    ILI9341_DispString_CH(10, 165, "高压报警：");
+    ILI9341_DispString_CH(10, 200, "低压报警：");
+}
+
+void Settings_Page_Update(void) 
+{
+    /* 1. C89 变量定义置顶 */
+    char buf[64];
+    uint16_t start_y = 60;
+    uint16_t step_y = 35;
+
+    LCD_SetFont(&Font8x16);
+
+    /* --- 第一行：心率 (下限与上限独立调节) --- */
+    LCD_SetColors(YELLOW, BLACK);
+    // 下限区
+    sprintf(buf, "[-] %3d [+]", g_sys_limit.hr_min);
+    ILI9341_DispString_EN(85, start_y, buf);
+    // 上限区
+    sprintf(buf, "[-] %3d [+]", g_sys_limit.hr_max);
+    ILI9341_DispString_EN(205, start_y, buf);
+
+    /* --- 第二行至第五行：单数值双按钮布局 --- */
+    LCD_SetColors(WHITE, BLACK);
+    // 血氧
+    sprintf(buf, "[-]  %2d%%  [+]", g_sys_limit.spo2_min);
+    ILI9341_DispString_EN(140, start_y + step_y, buf);
+    // 体温
+    sprintf(buf, "[-] %.1f C [+]", g_sys_limit.temp_max);
+    ILI9341_DispString_EN(140, start_y + step_y * 2, buf);
+    // 高压
+    sprintf(buf, "[-] %3d mmHg [+]", g_sys_limit.sbp_max);
+    ILI9341_DispString_EN(130, start_y + step_y * 3, buf);
+    // 低压
+    sprintf(buf, "[-] %3d mmHg [+]", g_sys_limit.dbp_max);
+    ILI9341_DispString_EN(130, start_y + step_y * 4, buf);
+}
+
+/**
+ * @brief 综合仪表盘报警逻辑实现
+ * @note 严格逻辑：仅在数据非0(已采集)时才进行阈值判定
+ */
+void Dashboard_Alarm_Implementation(void) 
+{
+    /* 1. C89 变量定义置顶 */
+    uint8_t  hr_err = 0, spo2_err = 0, temp_err = 0, h_bp_err = 0,l_bp_err = 0;
+    uint16_t icon_x = DASH_WAVE_X - 22;
+
+    /* 2. 逐项比对逻辑 */
+    
+    // --- 心率报警判定 ---
+    if (g_HealthData.hr > 0) { // 只有采集到心率才比
+        if (g_HealthData.hr > g_sys_limit.hr_max || g_HealthData.hr < g_sys_limit.hr_min) {
+            hr_err = 1;
+        }
+    }
+
+    // --- 血氧报警判定 ---
+    if (g_HealthData.spo2 > 0) {
+        if (g_HealthData.spo2 < g_sys_limit.spo2_min) {
+            spo2_err = 1;
+        }
+    }
+
+    // --- 体温报警判定 ---
+    if (g_HealthData.temp > 30.0f) { // MLX90614 测得人体有效温度才比
+        if (g_HealthData.temp > g_sys_limit.temp_max) {
+            temp_err = 1;
+        }
+    }
+
+    // --- 血压报警判定 (高压或低压任一超标) ---
+    if (g_HealthData.bp_high > 0 && g_HealthData.bp_low > 0) {
+        if (g_HealthData.bp_high > g_sys_limit.sbp_max ) {
+            h_bp_err = 1;
+        }
+        if (g_HealthData.bp_low < g_sys_limit.dbp_max) {
+            l_bp_err = 1;
+        }
+    }
+
+    /* 3. 渲染报警图标STM32F103_指南者开发板硬件规格书.pdf] */
+    LCD_SetFont(&Font8x16);
+    
+    if (hr_err) { LCD_SetColors(RED, BLACK); ILI9341_DispString_EN(icon_x, 60, "!"); }
+    else { LCD_SetTextColor(BLACK); ILI9341_DrawRectangle(icon_x, 60, 8, 16, 1); }
+
+    // 血氧行 (Y=110)
+    if (spo2_err) { LCD_SetColors(RED, BLACK); ILI9341_DispString_EN(icon_x, 110, "!"); }
+    else { LCD_SetTextColor(BLACK); ILI9341_DrawRectangle(icon_x, 110, 8, 16, 1); }
+
+    // 体温行 (Y=160)
+    if (temp_err) { LCD_SetColors(RED, BLACK); ILI9341_DispString_EN(icon_x, 160, "!"); }
+    else { LCD_SetTextColor(BLACK); ILI9341_DrawRectangle(icon_x, 160, 8, 16, 1); }
+
+    // 血压行 (Y=210)
+    if (h_bp_err) { LCD_SetColors(RED, BLACK); ILI9341_DispString_EN(icon_x, 195, "!"); }
+    else { LCD_SetTextColor(BLACK); ILI9341_DrawRectangle(icon_x, 195, 8, 16, 1); }
+    
+    if (l_bp_err) { LCD_SetColors(RED, BLACK); ILI9341_DispString_EN(icon_x, 215, "!"); }
+    else { LCD_SetTextColor(BLACK); ILI9341_DrawRectangle(icon_x, 215, 8, 16, 1); }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

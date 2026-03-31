@@ -48,6 +48,17 @@ typedef struct {
 } HealthData_t;
 extern HealthData_t g_HealthData;
 
+
+typedef struct {
+    uint8_t hr_max, hr_min;     /* 心率 (bpm) */
+    uint8_t spo2_min;           /* 血氧 (%) */
+    float   temp_max, temp_min; /* 体温 (Celsius) */
+    uint8_t sbp_max, sbp_min;   /* 收缩压/高压 (mmHg) */
+    uint8_t dbp_max, dbp_min;   /* 舒张压/低压 (mmHg) */
+} ThresholdConfig;
+extern ThresholdConfig g_sys_limit;
+
+
 void UI_Touch_Handler(void); //触控逻辑封装函数
 void UI_Display_Handler(void); //显示逻辑封装函数
 
@@ -64,4 +75,7 @@ void SPO2_Page_Init(void);
 void SPO2_Page_Update(void);
 void ECG_Page_Init(void);
 void ECG_Page_Update(void);
+void Settings_Page_Init(void);
+void Settings_Page_Update(void); 
+void Dashboard_Alarm_Implementation(void);
 #endif
