@@ -5,12 +5,14 @@
 int main(void)
 {
     /*变量声明*/
-
+    
     /*变量声明*/
 
     /*外设初始化*/
     delay_init(72);      // 延时初始化
     USART_Config();     // 串口初始化
+
+    RTC_Init();         // RTC初始化
     ADCx_Init();        //ADC初始化
     JFC103_USART_Config(); //JFC103 串口初始化
     ILI9341_Init();     //屏幕初始化
@@ -20,6 +22,7 @@ int main(void)
     Show_Startup_Logo();    //logo初始化
     Main_Menu_Display();    //主页面显示
     g_current_mode = MODE_MENU; //当前主页面菜单
+    SD_Card_Init();     //SD卡初始化
    /*外设初始化*/
     delay_ms(5);
     while(1)
@@ -28,6 +31,7 @@ int main(void)
         UI_Touch_Handler();
         /*显示响应*/ 
         UI_Display_Handler();
+        // printf("g_system_ticks: %u\r\n", g_system_ticks);
     }
 				
 }

@@ -10,6 +10,7 @@ static uint16_t last_y_pos = 120;    // 记录上一帧Y坐标
 System_Mode_t g_current_mode = MODE_MENU;
 strType_XPT2046_Coordinate touch_pos;
 HealthData_t g_HealthData;
+History_Type_t g_hist_view = HIST_HR;
 
 /* 实体定义：给全局变量分配内存并初始化 */
 ThresholdConfig g_sys_limit = {
@@ -63,8 +64,29 @@ void UI_Touch_Handler(void)
                     g_current_mode = MODE_SETTINGS;
                     Settings_Page_Init(); // 执行你设计的子菜单背景初始化
                 }
+                else if (touch_pos.x < GRID_LINE_X && touch_pos.y >= GRID_LINE_Y) {
+                    g_current_mode = MODE_HISTORY;
+                    History_Page_Init();
+                }
                 break;
-
+            case MODE_HISTORY:
+                if (touch_pos.y > 200) { // 底部按键区
+                    if (touch_pos.x < 55) { // [<]
+                        if (g_history_offset >= 40) g_history_offset -= 40;
+                    } else if (touch_pos.x > 265) { // [>]
+                        g_history_offset += 40;
+                    } else if (touch_pos.x < 108) g_hist_view = HIST_HR;
+                    else if (touch_pos.x < 161) g_hist_view = HIST_SPO2;
+                    else if (touch_pos.x < 214) g_hist_view = HIST_TEMP;
+                    else                        g_hist_view = HIST_BP;
+                    
+                    SD_Plot_Health_History(g_hist_view, g_history_offset);
+                }
+                else if (touch_pos.y < 40 && touch_pos.x > 220) {
+                    g_current_mode = MODE_MENU;
+                    Main_Menu_Display();
+                }
+                break;
             /* --- 场景：综合仪表盘 --- */
             case MODE_DASHBOARD:
                 // 点击右上角返回按钮
@@ -392,6 +414,9 @@ void Dashboard_Page_Update(void)
     uint16_t x, clean_x;
     uint16_t current_y[5];
     static uint16_t temp_tick = 0; // 用于体温采样分频
+
+    static uint32_t last_sec = 0xFF;
+    uint32_t current_sec = RTC_GetCounter();
     /* 1. 检查 JFC 模块数据是否就绪 */
     if (JFC_DataReady) 
     {
@@ -496,6 +521,12 @@ void Dashboard_Page_Update(void)
             last_bp_l = g_HealthData.bp_low;
         }
     Dashboard_Alarm_Implementation();
+    
+
+    if (g_HealthData.hr > 0 && current_sec != last_sec) {
+            SD_Log_Dashboard();
+            last_sec = current_sec; // 防止同一秒内重复存入
+        }
 }
 
 void Waveform_Menu_Init(void) // 实时波形选择界面
@@ -564,7 +595,7 @@ void SPO2_Page_Update(void)
     uint16_t x, curr_y, clean_x;
     int16_t raw_val;
     uint8_t j; 
-    
+
     /* 静态缓冲区：用于存放尚未画出的点 */
     static int8_t  fifo_queue[256];   /* 增大缓冲区，防止溢出 */
     static uint16_t queue_count = 0;   /* 队伍里还有多少个点 */
@@ -614,6 +645,9 @@ void SPO2_Page_Update(void)
         raw_val = (int16_t)fifo_queue[read_idx];
         curr_y = baseline_y - (raw_val * 50 / 128); 
 
+    // if (g_HealthData.wave_ptr % 20 == 0) {
+    //             SD_Log_SPO2_Wave(raw_val, last_spo2_val);
+    //         }
         // --- C. 连线 ---
         if (g_HealthData.wave_ptr > 0) {
             LCD_SetTextColor(GREEN);
@@ -629,6 +663,7 @@ void SPO2_Page_Update(void)
         if (g_HealthData.wave_ptr >= x_range) {
             g_HealthData.wave_ptr = 0; 
         }
+
     }
 }
 
@@ -660,7 +695,6 @@ void ECG_Page_Update(void)
     float ecg_voltage;
     int16_t relative_val;
     uint8_t s;
-    
     static uint16_t t_draw = 0;
 
     /* --- 核心配置参数 --- */
@@ -671,6 +705,7 @@ void ECG_Page_Update(void)
     const uint8_t  x_step = 1;       /* 保持 1 像素步长 */
     const uint16_t baseline_y = 140; /* 基准线设在 135，给 R 波向上留足空间 */
 
+    static uint8_t ecg_div = 0;
     /* 2. 周期判定：每 10 次主循环绘制一个点 */
     if (++t_draw < 5) return; 
     t_draw = 0;
@@ -678,7 +713,10 @@ void ECG_Page_Update(void)
     /* 3. 获取数据 (AD8232.c 中的滤波接口) */
     ecg_voltage = AD8232_Filter();
     relative_val = (int16_t)(ecg_voltage - 1650.0f);
-    
+    // if (++ecg_div >= 15) {
+    //         ecg_div = 0;
+    //         SD_Log_ECG_Raw(ecg_voltage);
+    //     }
     /* 4. Y 轴映射：为了让峰值更明显，增益维持在 200 以上 */
     curr_y = baseline_y - (relative_val * 150 / 1000); 
 
@@ -839,7 +877,33 @@ void Dashboard_Alarm_Implementation(void)
     else { LCD_SetTextColor(BLACK); ILI9341_DrawRectangle(icon_x, 215, 8, 16, 1); }
 }
 
+void History_Page_Init(void) {
+    ILI9341_Clear(0, 0, 320, 240);
+    LCD_SetFont(&Font16x24);
+    LCD_SetColors(YELLOW, BLACK);
+    ILI9341_DispString_CH(10, 10, "健康档案");
+    
+    LCD_SetColors(RED, BLACK);
+    ILI9341_DispString_CH(240, 10, "返回");
+    ILI9341_DrawLine(0, 40, 320, 40);
 
+    // --- 底部 6 合 1 导航栏 (每个按钮宽约 52 像素) ---
+    LCD_SetFont(&Font8x16);
+    // 翻页键
+    LCD_SetColors(BLACK, GREY);  
+    ILI9341_DrawRectangle(2,   200, 50, 35, 1); ILI9341_DispString_EN(20, 210, "<");
+    ILI9341_DrawRectangle(268, 200, 50, 35, 1); ILI9341_DispString_EN(285, 210, ">");
+    
+    // 分类键
+    LCD_SetColors(BLACK, RED);    ILI9341_DrawRectangle(55,  200, 50, 35, 1); ILI9341_DispString_CH(60, 210, "心");
+    LCD_SetColors(BLACK, GREEN);  ILI9341_DrawRectangle(108, 200, 50, 35, 1); ILI9341_DispString_CH(113, 210, "氧");
+    LCD_SetColors(BLACK, YELLOW); ILI9341_DrawRectangle(161, 200, 50, 35, 1); ILI9341_DispString_CH(166, 210, "温");
+    LCD_SetColors(BLACK, CYAN);   ILI9341_DrawRectangle(214, 200, 50, 35, 1); ILI9341_DispString_CH(219, 210, "压");
+}
+
+void History_Page_Update(void) {
+    // 历史页面主要通过触摸触发重绘，Update 中可以保持空白或检测 SD 卡状态
+}
 
 
 

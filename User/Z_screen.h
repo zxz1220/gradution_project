@@ -58,6 +58,14 @@ typedef struct {
 } ThresholdConfig;
 extern ThresholdConfig g_sys_limit;
 
+typedef enum {
+    HIST_HR = 0,    // C列：心率
+    HIST_SPO2,      // D列：血氧
+    HIST_TEMP,      // E列：体温
+    HIST_BP         // F列：血压 (高压/低压)
+} History_Type_t;
+
+extern History_Type_t g_hist_view; // 当前查看的分类
 
 void UI_Touch_Handler(void); //触控逻辑封装函数
 void UI_Display_Handler(void); //显示逻辑封装函数
@@ -78,4 +86,9 @@ void ECG_Page_Update(void);
 void Settings_Page_Init(void);
 void Settings_Page_Update(void); 
 void Dashboard_Alarm_Implementation(void);
+
+void History_Page_Init(void);
+void History_Page_Update(void);
+
+
 #endif

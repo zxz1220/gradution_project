@@ -28,6 +28,7 @@
 #include "./lcd/bsp_xpt2046_lcd.h"
 #include "./led/bsp_led.h"   
 #include "./usart/bsp_usart.h"
+#include "Z_common_headfile.h"
 
 /** @addtogroup STM32F10x_StdPeriph_Template
   * @{

@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F10X_HD, USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..\Libraries\CMSIS;..\..\User;..\..\Libraries\FWlib\inc</IncludePath>
+              <IncludePath>..\..\Libraries\CMSIS;..\..\User;..\..\Libraries\FWlib\inc;..\..\User\sdio;..\..\User\FATFS;..\..\User\FATFS\option</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -643,6 +643,56 @@
               <FileName>Z_common_headfile.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\User\Z_common_headfile.h</FilePath>
+            </File>
+            <File>
+              <FileName>diskio.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\FATFS\diskio.c</FilePath>
+            </File>
+            <File>
+              <FileName>ff.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\FATFS\ff.c</FilePath>
+            </File>
+            <File>
+              <FileName>ffconf.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\FATFS\ffconf.h</FilePath>
+            </File>
+            <File>
+              <FileName>integer.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\FATFS\integer.h</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_sdio_sdcard.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\sdio\bsp_sdio_sdcard.c</FilePath>
+            </File>
+            <File>
+              <FileName>cc936.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\FATFS\option\cc936.c</FilePath>
+            </File>
+            <File>
+              <FileName>syscall.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\FATFS\option\syscall.c</FilePath>
+            </File>
+            <File>
+              <FileName>Z_TF.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\Z_TF.c</FilePath>
+            </File>
+            <File>
+              <FileName>Z_RTC.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\Z_RTC.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_SysTick.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\SysTick\bsp_SysTick.c</FilePath>
             </File>
           </Files>
         </Group>

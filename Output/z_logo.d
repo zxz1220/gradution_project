@@ -35,6 +35,13 @@
 ..\..\output\z_logo.o: ..\..\User\./font/fonts.h
 ..\..\output\z_logo.o: ..\..\User\./font/fonts.h
 ..\..\output\z_logo.o: ..\..\User\./lcd/bsp_xpt2046_lcd.h
+..\..\output\z_logo.o: ..\..\User\./sdio/bsp_sdio_sdcard.h
+..\..\output\z_logo.o: ..\..\User\FATFS\diskio.h
+..\..\output\z_logo.o: ..\..\User\FATFS\integer.h
+..\..\output\z_logo.o: ..\..\User\./Systick/bsp_SysTick.h
+..\..\output\z_logo.o: ..\..\User\./FATFS/ff.h
+..\..\output\z_logo.o: ..\..\User\./FATFS/ffconf.h
+..\..\output\z_logo.o: ..\..\User\./FATFS/ffconf.h
 ..\..\output\z_logo.o: ..\..\User\max30102.h
 ..\..\output\z_logo.o: E:\keil_v5\Core\ARM\ARMCC\Bin\..\include\stdbool.h
 ..\..\output\z_logo.o: ..\..\User\sys.h
@@ -49,4 +56,6 @@
 ..\..\output\z_logo.o: ..\..\User\Z_MLX.h
 ..\..\output\z_logo.o: ..\..\User\Z_JFC.h
 ..\..\output\z_logo.o: ..\..\User\Z_logo.h
+..\..\output\z_logo.o: ..\..\User\Z_TF.h
+..\..\output\z_logo.o: ..\..\User\Z_RTC.h
 ..\..\output\z_logo.o: E:\keil_v5\Core\ARM\ARMCC\Bin\..\include\math.h
